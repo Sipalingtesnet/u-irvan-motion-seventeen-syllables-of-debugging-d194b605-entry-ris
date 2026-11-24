@@ -1,59 +1,91 @@
 #!/usr/bin/env python3
+"""Write a 5-7-5 haiku about debugging to /output/entry.txt.
+
+The poem is a single scene: a console still awake at three in the
+morning, a warning line that already said what was wrong, and a hand
+that scrolled straight past it. The last line is the turn -- the
+machine was never silent, I was just not reading.
+
+The program refuses to write anything it cannot check: it counts the
+syllables of the exact strings it ships, requires three lines, and
+requires the UTF-8 payload to fit the gate's 1-200 character window.
+"""
+
 import os
+import sys
 
-# Revised Haiku (Round 2) about debugging:
-# Line 1 (5 syllables): Dead lock in the log (5)
-# Line 2 (7 syllables): Break-point catches my cold breath (7)
-# Line 3 (5 syllables): Prod laughs at my fix (5)
+ENTRY_PATH = "/output/entry.txt"
 
-HAIKU_LINES = [
-    "Dead lock in the log,",
-    "Breakpoint catches my cold breath,",
-    "Prod laughs at my fix."
+# The poem itself. One scene, three lines, five-seven-five.
+HAIKU = [
+    "Console hums at three,",
+    "the warning line spelled it out,",
+    "I scrolled past it twice.",
 ]
 
-SYLLABLE_MAP = {
-    "Dead": 1,
-    "lock": 1,
-    "in": 1,
-    "the": 1,
-    "log,": 1,
-    "Breakpoint": 2,
-    "catches": 2,
-    "my": 1,
-    "cold": 1,
-    "breath,": 1,
-    "Prod": 1,
-    "laughs": 1,
+# Syllables per word, spelled out so the count is auditable rather than
+# guessed. Only words that actually appear in HAIKU belong here.
+SYLLABLES = {
+    "Console": 2,      # con-sole
+    "hums": 1,
     "at": 1,
-    "fix.": 1
+    "three,": 1,
+    "the": 1,
+    "warning": 2,      # warn-ing
+    "line": 1,
+    "spelled": 1,
+    "it": 1,
+    "out,": 1,
+    "I": 1,
+    "scrolled": 1,
+    "past": 1,
+    "twice.": 1,
 }
 
-def count_syllables(line):
-    words = line.split()
+TARGET_SHAPE = (5, 7, 5)
+MAX_CHARS = 200
+
+
+def syllables_of(line):
+    """Sum the hand-checked syllable counts for one line of the poem."""
     total = 0
-    for w in words:
-        if w not in SYLLABLE_MAP:
-            raise ValueError(f"Word '{w}' not found in SYLLABLE_MAP")
-        total += SYLLABLE_MAP[w]
+    for word in line.split():
+        if word not in SYLLABLES:
+            raise SystemExit("unmapped word, no verified count: %r" % word)
+        total += SYLLABLES[word]
     return total
 
-def verify_shape():
-    expected = [5, 7, 5]
-    for i, line in enumerate(HAIKU_LINES):
-        s = count_syllables(line)
-        if s != expected[i]:
-            raise AssertionError(f"Line {i+1} syllable count error: expected {expected[i]}, got {s} for '{line}'")
+
+def check_poem():
+    """Fail loudly on any form violation before a byte is written."""
+    if len(HAIKU) != 3:
+        raise SystemExit("a haiku has three lines, this has %d" % len(HAIKU))
+    for index, (line, wanted) in enumerate(zip(HAIKU, TARGET_SHAPE), start=1):
+        got = syllables_of(line)
+        if got != wanted:
+            raise SystemExit(
+                "line %d should hold %d syllables, counts %d: %r"
+                % (index, wanted, got, line)
+            )
+        if not line.strip():
+            raise SystemExit("line %d is blank" % index)
+    return "\n".join(HAIKU)
+
 
 def main():
-    verify_shape()
-    content = "\n".join(HAIKU_LINES)
-    if len(content.encode("utf-8")) > 200 or len(content) == 0:
-        raise AssertionError("Content length out of bounds (1-200 chars)")
-    os.makedirs("/output", exist_ok=True)
-    with open("/output/entry.txt", "w", encoding="utf-8") as f:
-        f.write(content)
-    print("Successfully generated /output/entry.txt")
+    text = check_poem()
+    payload = text.encode("utf-8")
+    if not 1 <= len(payload) <= MAX_CHARS:
+        raise SystemExit(
+            "payload is %d bytes, outside the 1-%d gate" % (len(payload), MAX_CHARS)
+        )
+
+    os.makedirs(os.path.dirname(ENTRY_PATH), exist_ok=True)
+    with open(ENTRY_PATH, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+    sys.stdout.write("wrote %d bytes of haiku to %s\n" % (len(payload), ENTRY_PATH))
+
 
 if __name__ == "__main__":
     main()
